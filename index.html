@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Country Battles</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Apply saved theme immediately to prevent flash of wrong theme -->
+  <script>
+    (function() {
+      try {
+        if (localStorage.getItem('cb_theme') === 'light') {
+          document.documentElement.classList.add('light-mode');
+        }
+      } catch(e) {}
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+</head>
+<body>
+
+<!-- Theme toggle (always visible) -->
+<button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">🌙</button>
+
+<!-- ══════════════════════════════════════ SCREEN: WELCOME -->
+<div id="screen-welcome" class="screen active">
+  <div class="welcome-content">
+    <div class="logo">
+      <span class="logo-globe">🌍</span>
+      <h1>Country Battles</h1>
+      <p class="tagline">Name every country on the map. Race the clock. Outlast everyone.</p>
+    </div>
+    <div class="welcome-actions">
+      <button class="btn btn-primary btn-xl" id="btn-new-game">New Game</button>
+    </div>
+    <div id="personal-best-card" class="pb-card hidden">
+      <div class="pb-title">🏆 Your Personal Best</div>
+      <div class="pb-stats">
+        <span id="pb-score">—</span>
+        <span class="pb-sep">·</span>
+        <span id="pb-time">—:——</span>
+        <span class="pb-sep">·</span>
+        <span id="pb-date">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ SCREEN: SETUP -->
+<div id="screen-setup" class="screen">
+  <div class="setup-container">
+    <div class="setup-header">
+      <button class="btn btn-ghost btn-back" id="btn-back-to-welcome">← Back</button>
+      <h2>Who's Playing?</h2>
+    </div>
+
+    <p class="setup-hint">🎤 Players take turns speaking country names out loud — no typing needed.</p>
+
+    <div id="players-list" class="players-list"></div>
+
+    <div class="add-player-form">
+      <div class="form-row">
+        <button class="emoji-picker-btn" id="emoji-picker-btn">😀</button>
+        <input type="text" id="player-name-input" class="input-name" placeholder="Enter your name…" maxlength="20" />
+        <button class="btn btn-secondary" id="btn-add-player">Add Player</button>
+      </div>
+      <div class="emoji-grid hidden" id="emoji-grid"></div>
+    </div>
+
+    <!-- Speech support warning (shown if browser doesn't support it) -->
+    <div class="speech-warning hidden" id="speech-warning">
+      ⚠️ Your browser doesn't support voice recognition. Please use <strong>Chrome</strong> for this game.
+    </div>
+
+    <div class="setup-footer">
+      <button class="btn btn-primary btn-xl" id="btn-start-game" disabled>Start Game</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ SCREEN: GAME -->
+<div id="screen-game" class="screen">
+  <div class="game-layout">
+
+    <!-- MAP -->
+    <div class="map-container" id="map-container">
+      <div class="map-loading" id="map-loading">Loading map…</div>
+
+      <!-- Turn announcement — slides in at the TOP of the map, never covers it -->
+      <div class="turn-topbar hidden" id="turn-overlay">
+        <div class="turn-topbar-emoji" id="turn-overlay-emoji">😀</div>
+        <div class="turn-topbar-text">
+          <span class="turn-topbar-label">IT'S YOUR TURN</span>
+          <span class="turn-topbar-name"  id="turn-overlay-name">Player</span>
+        </div>
+        <div class="turn-topbar-hint">🎤 Say a country name!</div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <!-- Top bar -->
+      <div class="sidebar-top">
+        <div class="timer" id="game-timer">00:00</div>
+        <div class="sidebar-top-actions">
+          <button class="btn btn-warning btn-sm" id="btn-pause-game">⏸ Pause</button>
+          <button class="btn btn-ghost   btn-sm" id="btn-end-game">End</button>
+        </div>
+      </div>
+
+      <!-- CURRENT TURN — large, impossible to miss -->
+      <div class="turn-section" id="turn-section">
+        <div class="turn-now-label">NOW GUESSING</div>
+        <div class="turn-banner" id="turn-banner">
+          <div class="turn-player-emoji" id="turn-player-emoji">😀</div>
+          <div class="turn-player-info">
+            <div class="turn-player-name"  id="turn-player-name">—</div>
+            <div class="turn-player-lives" id="turn-player-lives"></div>
+          </div>
+          <!-- Countdown ring sits inside the banner row -->
+          <div class="countdown-ring-container">
+            <svg class="countdown-ring" viewBox="0 0 120 120">
+              <circle class="ring-bg"   cx="60" cy="60" r="52"/>
+              <circle class="ring-fill" cx="60" cy="60" r="52" id="ring-fill"/>
+            </svg>
+            <div class="countdown-num-display" id="countdown-num-display">10</div>
+          </div>
+        </div>
+        <div class="countdown-label" id="countdown-label">seconds remaining</div>
+      </div>
+
+      <!-- LISTENING indicator (replaces text input) -->
+      <div class="sidebar-section listening-section">
+        <div class="section-label">Voice</div>
+
+        <div class="listening-card" id="listening-card">
+          <!-- Animated sound bars -->
+          <div class="sound-waves" id="sound-waves">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="listening-info">
+            <div class="listening-label" id="listening-label">Waiting…</div>
+            <div class="listening-hint"  id="listening-hint">Say a country name out loud</div>
+          </div>
+        </div>
+
+        <!-- Live speech transcript -->
+        <div class="live-transcript" id="live-transcript"></div>
+
+        <!-- Always-visible text input -->
+        <div class="type-input-row">
+          <input type="text" id="type-guess-input" class="type-guess-input"
+            placeholder="Type a country…" autocomplete="off" autocorrect="off"
+            autocapitalize="off" spellcheck="false" maxlength="60" />
+          <button class="type-guess-btn" id="type-guess-btn" title="Submit guess">↵</button>
+        </div>
+      </div>
+
+      <!-- Scoreboard -->
+      <div class="sidebar-section">
+        <div class="section-label">Scoreboard</div>
+        <div id="players-scoreboard" class="players-scoreboard"></div>
+      </div>
+
+      <!-- Region progress -->
+      <div class="sidebar-section">
+        <div class="section-label">Regions</div>
+        <div id="region-progress" class="region-progress"></div>
+      </div>
+
+      <!-- Log -->
+      <div class="sidebar-section">
+        <div class="section-label">Recent</div>
+        <div id="guess-log" class="guess-log"></div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ SCREEN: RESULTS -->
+<div id="screen-results" class="screen">
+  <div class="results-container">
+    <div class="results-header">
+      <h2 id="results-title">Game Over!</h2>
+      <div class="results-summary" id="results-summary"></div>
+    </div>
+    <div class="podium" id="podium"></div>
+    <div class="pb-comparison hidden" id="pb-comparison">
+      <div class="pb-comparison-title" id="pb-comparison-title">🏆 New Personal Best!</div>
+      <div class="pb-comparison-grid"  id="pb-comparison-grid"></div>
+    </div>
+    <div class="results-regions" id="results-regions"></div>
+    <div class="results-actions">
+      <button class="btn btn-primary btn-xl" id="btn-play-again">Play Again</button>
+      <button class="btn btn-ghost"          id="btn-main-menu">Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ PAUSE OVERLAY -->
+<div id="pause-overlay" class="pause-overlay hidden">
+  <div class="pause-content">
+    <div class="pause-warning-icon">⚠️</div>
+    <div class="pause-title">GAME PAUSED</div>
+    <div class="pause-subtitle">Pausing is penalized to keep the game fair.</div>
+    <div class="pause-unlock-text" id="pause-unlock-text">Resume available in 5:00</div>
+    <button class="btn btn-primary btn-xl" id="btn-resume-game" disabled>▶ Resume</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ TOAST -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="js/countries.js"></script>
+<script src="js/map.js"></script>
+<script src="js/voice.js"></script>
+<script src="js/sounds.js"></script>
+<script src="js/game.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -8,6 +8,7 @@ const PB_KEY    = 'country_battles_pb';
 const MAX_LIVES = 5;
 
 const GameState = {
+  gameMode:        'world',
   players:         [],
   claimed:         new Map(),
   timer:           0,
@@ -250,7 +251,7 @@ function makeGuess(input, playerId) {
     if (!active || active.id !== playerId) return { success: false, reason: 'not_your_turn' };
   }
 
-  var country = findCountry(input);
+  var country = findCountry(input, GameState.gameMode);
   if (!country) return { success: false, reason: 'not_found', input: input };
 
   if (GameState.claimed.has(country.id)) {

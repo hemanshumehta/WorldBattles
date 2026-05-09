@@ -55,16 +55,18 @@ function _buildRecognition() {
   r.onerror = function (e) {
     if (e.error === 'no-speech') return; // normal silence — ignore
     console.warn('SpeechRecognition error:', e.error);
-    // Auto-restart on recoverable errors so the engine stays alive
-    if (_isListening && (e.error === 'network' || e.error === 'aborted')) {
-      setTimeout(function () { _safeStart(); }, 300);
-    }
+    // We let onend handle the restart to ensure we rebuild the object cleanly.
   };
 
-  // Keep the engine alive: restart as soon as it ends (Chrome stops after ~60 s silence)
+  // Keep the engine alive: restart as soon as it ends (Chrome stops after ~60 s silence or ~9 mins of use)
   r.onend = function () {
     if (_isListening) {
-      setTimeout(function () { _safeStart(); }, 150);
+      setTimeout(function () {
+        if (!_isListening) return;
+        // Rebuild to completely bypass Chrome's 9 minute session limits
+        _recognition = _buildRecognition();
+        _safeStart();
+      }, 150);
     }
   };
 

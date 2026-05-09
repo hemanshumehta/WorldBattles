@@ -98,16 +98,25 @@ function initWelcome() {
     $('pb-date').textContent  = new Date(pb.date).toLocaleDateString();
   }
 
-  $('btn-new-game').addEventListener('click', function() {
+  function startSetup() {
     resetPlayers();
     clearProfiles();
     renderPlayersList();
     updateStartButton();
-    // Warn if speech not supported
     if (!isSpeechSupported()) {
       $('speech-warning').classList.remove('hidden');
     }
     showScreen('setup');
+  }
+
+  $('btn-new-game-world').addEventListener('click', function() {
+    GameState.gameMode = 'world';
+    startSetup();
+  });
+
+  $('btn-new-game-capitals').addEventListener('click', function() {
+    GameState.gameMode = 'capitals';
+    startSetup();
   });
 }
 
@@ -227,6 +236,16 @@ async function handleStartGame() {
 
   renderScoreboard();
   renderRegionProgress();
+
+  var itemType = GameState.gameMode === 'capitals' ? 'capital' : 'country';
+  var typeInput = $('type-guess-input');
+  if (typeInput) typeInput.placeholder = 'Type a ' + itemType + '…';
+  var setupHint = $('setup-hint');
+  if (setupHint) setupHint.textContent = '🎤 Players take turns speaking ' + itemType + ' names out loud — no typing needed.';
+  var topbarHint = $('turn-topbar-hint');
+  if (topbarHint) topbarHint.textContent = '🎤 Say a ' + itemType + ' name!';
+  var listeningHint = $('listening-hint');
+  if (listeningHint) listeningHint.textContent = 'Say a ' + itemType + ' name out loud';
 }
 
 // ── Text input ─────────────────────────────────────────────────────────────────
@@ -247,7 +266,8 @@ function initTypeInput() {
     if (result.success || result.reason === 'already_claimed') {
       handleGuessResult(result, text);
     } else if (result.reason === 'not_found') {
-      toast('❓ "' + text + '" not recognised as a country', 'warning', 1800);
+      var itemType = GameState.gameMode === 'capitals' ? 'capital' : 'country';
+      toast('❓ "' + text + '" not recognised as a ' + itemType, 'warning', 1800);
     }
   }
 
@@ -310,8 +330,9 @@ function setListeningState(active, labelText, hintText, color) {
   if (!card) return;
 
   card.classList.toggle('is-listening', !!active);
+  var itemType = GameState.gameMode === 'capitals' ? 'capital' : 'country';
   label.textContent = labelText || (active ? 'Listening…' : 'Waiting…');
-  hint.textContent  = hintText  || (active ? 'Say a country name out loud' : '');
+  hint.textContent  = hintText  || (active ? 'Say a ' + itemType + ' name out loud' : '');
 
   // Color the waves to match the active player
   if (color && active) {
@@ -334,8 +355,13 @@ function handleGuessResult(result, rawInput) {
   if (result.success) {
     playCorrect();
     var p = result.player;
-    addLogEntry(p ? p.emoji : '✅', result.country.name, p ? p.name : 'Player', true);
-    toast((p ? p.emoji + ' ' + p.name : '') + ' got ' + result.country.name + '!', 'success', 2000);
+    var displayName = result.country.name;
+    if (GameState.gameMode === 'capitals' && result.country.capital) {
+      displayName = result.country.capital + ' (' + result.country.name + ')';
+    }
+    
+    addLogEntry(p ? p.emoji : '✅', displayName, p ? p.name : 'Player', true);
+    toast((p ? p.emoji + ' ' + p.name : 'You') + ' got ' + displayName + '!', 'success', 2000);
     renderScoreboard();
     renderRegionProgress();
 
@@ -376,9 +402,10 @@ function onGameUpdate(type, data) {
     renderScoreboard();
 
     // Update listening card to show whose turn it is
+    var itemType = GameState.gameMode === 'capitals' ? 'capital' : 'country';
     setListeningState(true,
       'Listening for ' + data.name + '…',
-      'Say a country name out loud',
+      'Say a ' + itemType + ' name out loud',
       data.color
     );
 
@@ -601,7 +628,8 @@ function handleResume() {
   // Unmute the already-running recognition engine — no new permission prompt ever
   resumeListening();
   if (active) {
-    setListeningState(true, 'Listening for ' + active.name + '…', 'Say a country name out loud', active.color);
+    var itemType = GameState.gameMode === 'capitals' ? 'capital' : 'country';
+    setListeningState(true, 'Listening for ' + active.name + '…', 'Say a ' + itemType + ' name out loud', active.color);
   }
 }
 
